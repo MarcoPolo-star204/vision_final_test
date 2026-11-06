@@ -12,6 +12,7 @@ ft_detector:
   small_armor_height: 0.125
   large_gap_ratio: 1.4
   max_gap_ratio: 6.0
+  merge_distance: 0.25
 
   # light bar shape filter
   min_aspect: 1.5

@@ -50,6 +50,7 @@ class FtDetector {
     pnh.param<double>("small_armor_height", small_h_, 0.125);
     pnh.param<double>("large_gap_ratio", large_gap_ratio_, 1.4);
     pnh.param<double>("max_gap_ratio", max_gap_ratio_, 3.0);
+    pnh.param<double>("merge_distance", merge_distance_, 0.25);
     pnh.param<double>("min_aspect", min_aspect_, 1.5);
     pnh.param<double>("max_aspect", max_aspect_, 12.0);
     pnh.param<double>("min_fill", min_fill_, 0.35);
@@ -335,6 +336,20 @@ class FtDetector {
                                " " + std::to_string(id),
                     cv::Point(static_cast<int>(lt.x), static_cast<int>(lt.y) - 6),
                     cv::FONT_HERSHEY_SIMPLEX, 0.5, color_draw, 1);
+        bool duplicate = false;
+        if (has_info_) {
+          for (const auto& existing : out.detections) {
+            if (existing.is_red != det.is_red) continue;
+            const double dx = existing.pose.position.x - det.pose.position.x;
+            const double dy = existing.pose.position.y - det.pose.position.y;
+            const double dz = existing.pose.position.z - det.pose.position.z;
+            if (std::sqrt(dx * dx + dy * dy + dz * dz) < merge_distance_) {
+              duplicate = true;
+              break;
+            }
+          }
+        }
+        if (duplicate) { ++id; continue; }
         out.detections.push_back(det);
         ++id;
       }
@@ -358,6 +373,7 @@ class FtDetector {
   double small_w_ = 0.120, small_h_ = 0.125;
   double large_gap_ratio_ = 1.4;
   double max_gap_ratio_ = 3.0;
+  double merge_distance_ = 0.25;
   double min_aspect_ = 1.5, max_aspect_ = 12.0, min_fill_ = 0.35;
   std::string fallback_frame_ = "camera";
   std::vector<double> fallback_K_, fallback_D_;
