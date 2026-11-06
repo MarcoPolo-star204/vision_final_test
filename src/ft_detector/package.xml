@@ -13,4 +13,6 @@
   <depend>image_transport</depend>
   <depend>dynamic_reconfigure</depend>
   <depend>ft_msgs</depend>
+  <depend>tf2</depend>
+  <depend>tf2_ros</depend>
 </package>

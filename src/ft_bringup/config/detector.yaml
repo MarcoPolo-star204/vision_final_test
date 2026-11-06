@@ -4,3 +4,29 @@ ft_detector:
   detection_topic: /ft/detection
   debug_topic: /ft/debug/image
   queue_size: 2
+
+  # armor geometry (m)
+  large_armor_width: 0.235
+  large_armor_height: 0.127
+  small_armor_width: 0.120
+  small_armor_height: 0.125
+  large_gap_ratio: 1.4
+
+  # light bar shape filter
+  min_aspect: 1.5
+  max_aspect: 12.0
+  min_fill: 0.35
+
+  # dynamic_reconfigure defaults
+  red_h_min: 0
+  red_h_max: 10
+  red_h_min2: 170
+  red_h_max2: 180
+  blue_h_min: 100
+  blue_h_max: 130
+  s_min: 80
+  v_min: 80
+  min_area: 20
+  max_angle_diff: 10.0
+  max_height_diff: 0.4
+  max_gap: 600.0
