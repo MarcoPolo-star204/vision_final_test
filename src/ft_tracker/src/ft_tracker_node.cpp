@@ -57,7 +57,14 @@ class FtTracker {
   void callback(const ft_msgs::DetectionArrayConstPtr& msg) {
     double dt = 0.05;
     if (!last_stamp_.isZero()) {
-      dt = (msg->header.stamp - last_stamp_).toSec();
+      if (msg->header.stamp < last_stamp_) {
+        // bag 循环或时间戳回退：重置计时，避免 dt 过小导致永远不丢轨迹
+        last_stamp_ = msg->header.stamp;
+        lost_time_ = 0.0;
+        dt = 0.05;
+      } else {
+        dt = (msg->header.stamp - last_stamp_).toSec();
+      }
     }
     dt = std::max(0.001, std::min(dt, 0.2));
     last_stamp_ = msg->header.stamp;
