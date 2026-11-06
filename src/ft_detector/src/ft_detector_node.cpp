@@ -94,6 +94,9 @@ class FtDetector {
     cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
     cv::morphologyEx(mask, mask, cv::MORPH_OPEN, kernel);
     cv::morphologyEx(mask, mask, cv::MORPH_CLOSE, kernel);
+    // 竖向连接被反光/遮挡切断的灯条，横向不连接，避免跨灯条粘连。
+    cv::Mat vertical = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(2, 15));
+    cv::morphologyEx(mask, mask, cv::MORPH_CLOSE, vertical);
 
     std::vector<std::vector<cv::Point>> contours;
     cv::findContours(mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
