@@ -124,3 +124,59 @@ dynamic_reconfigure: 修改 red_h_max/min_area 生效
 - `solvePnP` 使用 `SOLVEPNP_IPPE`，平面目标。
 - 跟踪只做单目标匀速模型；换面、旋转、多车选择属于进阶。
 - 检测 ID 只保证帧内唯一，不做跨帧关联。
+
+## 真实 bag 测试记录（2026-11-06）
+
+素材位置（工作空间内，不提交）：
+
+```text
+~/catkin_ws/bags/
+├── blue_1.bag        373 MB
+├── red_4.bag         414 MB
+├── blue_guard.bag    165 MB
+└── red_1&3.bag        58 MB
+```
+
+运行：
+
+```bash
+roslaunch ft_bringup vision_final.launch rviz:=false use_sim_time:=false
+rosbag play -s 8 --rate 0.5 -l ~/catkin_ws/bags/blue_1.bag
+```
+
+`blue_1.bag` 约 200 帧统计：
+
+```text
+/ft/detection 非空约 140 帧
+tracking=true 约 68 帧
+检测距离 z 多在 3–6 m
+```
+
+已加的保护：
+
+- 横向状态灯过滤；
+- 灯条竖向闭运算；
+- `max_gap_ratio=6.0`；
+- PnP 重投影误差 `<=30 px`；
+- 检测距离 `1.0–8.0 m`；
+- 3D 重复检测合并 `0.25 m`；
+- tracker 连续 10 帧丢检 / 外推超过 2 m 重置。
+
+已知问题：
+
+- 检测仍会跳到背景灯条，导致 `tracking` 频繁变 false；
+- `red_4.bag` 尚未调参；
+- 进阶 ONNX 模型是 FLOAT16，OpenCV 4.2 DNN 不支持，需要 ONNX Runtime；
+- 演示视频、Git 远程仓库尚未完成。
+
+## Git
+
+本地提交历史：
+
+```text
+f6ddb74 Clamp tracker prediction and reset after repeated misses
+97055c6 Reset tracker timing when bag stamps go backwards
+516ebdc Reject detections with high PnP reprojection error
+```
+
+远程仓库地址待定；提交前打 tag `vision-final-test-submit`。

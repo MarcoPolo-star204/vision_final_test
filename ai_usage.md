@@ -30,3 +30,13 @@
 - [ ] 跟踪 Q/R、门限、T 能解释
 - [ ] 没有让 AI 读私有 bag 真值
 - [ ] 没有整包生成后原样提交
+
+## 实际使用记录（2026-11-06）
+
+- 用 AI 生成 catkin 包骨架、消息定义、CMake/package.xml、launch/YAML 样板；
+- 用 AI 实现 HSV 分割、灯条配对、PnP、TF、调试图、Kalman 跟踪初版；
+- 用 AI 排查 catkin 嵌套包、tf2 依赖、Marker 类型不匹配、bag 循环时间戳回退；
+- 真实 bag 调参由本人根据 `/ft/debug/image` 和 `/ft/detection` 结果决定，AI 给出候选阈值；
+- 被否掉的方案：直接用现成 YOLO 框架（考核禁止）、用 OpenCV DNN 跑 FLOAT16 ONNX（版本不支持）、无限 predict（会漂移）。
+
+待本人补充：姓名/学号、每处改动的 review 说明、对话截图。
