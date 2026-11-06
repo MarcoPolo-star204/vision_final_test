@@ -14,6 +14,8 @@ ft_detector:
   max_gap_ratio: 6.0
   merge_distance: 0.25
   max_distance: 8.0
+  min_distance: 1.0
+  max_reproj_error: 30.0
 
   # light bar shape filter
   min_aspect: 1.5
