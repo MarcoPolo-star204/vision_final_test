@@ -99,8 +99,20 @@ class FtTracker {
       kf_.correct(meas);
       tracking = true;
       lost_time_ = 0.0;
+      miss_count_ = 0;
+      last_observed_.x = kf_.statePost.at<float>(0);
+      last_observed_.y = kf_.statePost.at<float>(1);
+      last_observed_.z = kf_.statePost.at<float>(2);
     } else {
       lost_time_ += dt;
+      ++miss_count_;
+      const double dx = kf_.statePost.at<float>(0) - last_observed_.x;
+      const double dy = kf_.statePost.at<float>(1) - last_observed_.y;
+      const double dz = kf_.statePost.at<float>(2) - last_observed_.z;
+      if (miss_count_ > 10 || std::sqrt(dx*dx + dy*dy + dz*dz) > 2.0) {
+        reset();
+        return;
+      }
     }
 
     if (lost_time_ > max_lost_) { reset(); return; }
@@ -142,6 +154,8 @@ class FtTracker {
   cv::KalmanFilter kf_;
   bool initialized_ = false;
   double lost_time_ = 0.0;
+  int miss_count_ = 0;
+  geometry_msgs::Point last_observed_;
   ros::Time last_stamp_;
   ros::Subscriber sub_;
   ros::Publisher track_pub_, marker_pub_;
