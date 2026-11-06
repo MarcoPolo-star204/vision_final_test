@@ -1,0 +1,32 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Displays
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz/Grid
+      Enabled: true
+      Name: Grid
+    - Class: rviz/TF
+      Enabled: true
+      Name: TF
+    - Class: rviz/Marker
+      Enabled: true
+      Name: TrackMarker
+      Marker Topic: /ft/debug/marker
+    - Class: rviz/Image
+      Enabled: true
+      Name: DebugImage
+      Image Topic: /ft/debug/image
+  Enabled: true
+  Global Options:
+    Fixed Frame: camera
+    Background Color: 48; 48; 48
+    Frame Rate: 30
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 5
+      Pitch: 0.4
+      Yaw: 0.8
+      Target Frame: <Fixed Frame>

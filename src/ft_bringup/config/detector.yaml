@@ -1,0 +1,6 @@
+ft_detector:
+  image_topic: /hk_camera/image_raw/compressed
+  camera_info_topic: /hk_camera/camera_info
+  detection_topic: /ft/detection
+  debug_topic: /ft/debug/image
+  queue_size: 2

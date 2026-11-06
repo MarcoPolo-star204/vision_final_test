@@ -1,0 +1,11 @@
+<launch>
+  <rosparam command="load" file="$(find ft_bringup)/config/detector.yaml"/>
+  <rosparam command="load" file="$(find ft_bringup)/config/tracker.yaml"/>
+
+  <node pkg="ft_detector" type="ft_detector_node" name="ft_detector" output="screen"/>
+  <node pkg="ft_tracker" type="ft_tracker_node" name="ft_tracker" output="screen"/>
+  <node pkg="ft_selector" type="ft_selector_node" name="ft_selector" output="screen"/>
+
+  <node pkg="rviz" type="rviz" name="rviz"
+        args="-d $(find ft_bringup)/rviz/vision_final.rviz"/>
+</launch>
