@@ -13,6 +13,7 @@ ft_detector:
   large_gap_ratio: 1.4
   max_gap_ratio: 6.0
   merge_distance: 0.25
+  max_distance: 8.0
 
   # light bar shape filter
   min_aspect: 1.5

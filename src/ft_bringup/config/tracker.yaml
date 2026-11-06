@@ -3,8 +3,8 @@ ft_tracker:
   track_topic: /ft/track
   marker_topic: /ft/debug/marker
   T: 0.1
-  gate: 0.4
+  gate: 0.8
   q_pos: 0.01
   q_vel: 0.1
   r_meas: 0.02
-  max_lost: 0.5
+  max_lost: 1.0

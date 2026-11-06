@@ -51,6 +51,7 @@ class FtDetector {
     pnh.param<double>("large_gap_ratio", large_gap_ratio_, 1.4);
     pnh.param<double>("max_gap_ratio", max_gap_ratio_, 3.0);
     pnh.param<double>("merge_distance", merge_distance_, 0.25);
+    pnh.param<double>("max_distance", max_distance_, 8.0);
     pnh.param<double>("min_aspect", min_aspect_, 1.5);
     pnh.param<double>("max_aspect", max_aspect_, 12.0);
     pnh.param<double>("min_fill", min_fill_, 0.35);
@@ -297,6 +298,7 @@ class FtDetector {
               continue;
             }
           }
+          if (tvec[2] < 0.3 || tvec[2] > max_distance_) { ++id; continue; }
           det.pose.position.x = tvec[0];
           det.pose.position.y = tvec[1];
           det.pose.position.z = tvec[2];
@@ -374,6 +376,7 @@ class FtDetector {
   double large_gap_ratio_ = 1.4;
   double max_gap_ratio_ = 3.0;
   double merge_distance_ = 0.25;
+  double max_distance_ = 8.0;
   double min_aspect_ = 1.5, max_aspect_ = 12.0, min_fill_ = 0.35;
   std::string fallback_frame_ = "camera";
   std::vector<double> fallback_K_, fallback_D_;
