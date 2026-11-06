@@ -49,6 +49,7 @@ class FtDetector {
     pnh.param<double>("small_armor_width", small_w_, 0.120);
     pnh.param<double>("small_armor_height", small_h_, 0.125);
     pnh.param<double>("large_gap_ratio", large_gap_ratio_, 1.4);
+    pnh.param<double>("max_gap_ratio", max_gap_ratio_, 3.0);
     pnh.param<double>("min_aspect", min_aspect_, 1.5);
     pnh.param<double>("max_aspect", max_aspect_, 12.0);
     pnh.param<double>("min_fill", min_fill_, 0.35);
@@ -100,13 +101,22 @@ class FtDetector {
       const double area = cv::contourArea(c);
       if (area < cfg_.min_area) continue;
       cv::RotatedRect rect = cv::minAreaRect(c);
-      float w = rect.size.width;
-      float h = rect.size.height;
-      if (w > h) std::swap(w, h);
-      if (h < 1.f) continue;
+      const float rw = rect.size.width;
+      const float rh = rect.size.height;
+      if (rw < 1.f || rh < 1.f) continue;
+
+      // 灯条的长轴必须接近竖直；横向的顶部状态灯要排除。
+      const bool width_is_long = rw >= rh;
+      const float long_axis_angle = std::fabs(rect.angle);
+      const bool long_is_vertical = width_is_long ? (long_axis_angle > 45.f)
+                                                  : (long_axis_angle < 45.f);
+      if (!long_is_vertical) continue;
+
+      const float w = std::min(rw, rh);
+      const float h = std::max(rw, rh);
       const float aspect = h / w;
       if (aspect < min_aspect_ || aspect > max_aspect_) continue;
-      const float fill = static_cast<float>(area / (rect.size.width * rect.size.height + 1e-6));
+      const float fill = static_cast<float>(area / (rw * rh + 1e-6));
       if (fill < min_fill_) continue;
 
       LightBar bar;
@@ -133,8 +143,10 @@ class FtDetector {
     if (angle_diff > cfg_.max_angle_diff) return false;
     if (center_dy > 0.5f) return false;
     if (gap < 0.7f * avg_w || gap > cfg_.max_gap) return false;
+    const float gap_ratio = gap / (avg_h + 1e-6f);
+    if (gap_ratio < 0.4f || gap_ratio > max_gap_ratio_) return false;
 
-    is_large = (gap / (avg_h + 1e-6f)) > large_gap_ratio_;
+    is_large = gap_ratio > large_gap_ratio_;
     return true;
   }
 
@@ -272,10 +284,14 @@ class FtDetector {
           cv::Vec3d rvec, tvec;
           try {
             cv::solvePnP(obj_pts, img_pts, K, D, rvec, tvec, false, cv::SOLVEPNP_IPPE);
-          } catch (const cv::Exception& e) {
-            ROS_WARN_STREAM_THROTTLE(1.0, "solvePnP: " << e.what());
-            ++id;
-            continue;
+          } catch (const cv::Exception& e1) {
+            try {
+              cv::solvePnP(obj_pts, img_pts, K, D, rvec, tvec, false, cv::SOLVEPNP_ITERATIVE);
+            } catch (const cv::Exception& e2) {
+              ROS_WARN_STREAM_THROTTLE(1.0, "solvePnP failed: " << e1.what() << " / " << e2.what());
+              ++id;
+              continue;
+            }
           }
           det.pose.position.x = tvec[0];
           det.pose.position.y = tvec[1];
@@ -338,6 +354,7 @@ class FtDetector {
   double large_w_ = 0.235, large_h_ = 0.127;
   double small_w_ = 0.120, small_h_ = 0.125;
   double large_gap_ratio_ = 1.4;
+  double max_gap_ratio_ = 3.0;
   double min_aspect_ = 1.5, max_aspect_ = 12.0, min_fill_ = 0.35;
   std::string fallback_frame_ = "camera";
   std::vector<double> fallback_K_, fallback_D_;
