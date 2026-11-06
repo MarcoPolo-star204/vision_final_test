@@ -52,6 +52,9 @@ class FtDetector {
     pnh.param<double>("min_aspect", min_aspect_, 1.5);
     pnh.param<double>("max_aspect", max_aspect_, 12.0);
     pnh.param<double>("min_fill", min_fill_, 0.35);
+    pnh.param<std::string>("fallback_frame", fallback_frame_, "camera");
+    pnh.getParam("fallback_camera_matrix", fallback_K_);
+    pnh.getParam("fallback_distortion", fallback_D_);
 
     image_sub_ = nh.subscribe(image_topic_, queue_size_, &FtDetector::imageCallback, this);
     info_sub_ = nh.subscribe(info_topic_, 1, &FtDetector::infoCallback, this);
@@ -190,9 +193,13 @@ class FtDetector {
 
     std_msgs::Header header;
     header.stamp = msg->header.stamp;
-    header.frame_id = !msg->header.frame_id.empty()
-                          ? msg->header.frame_id
-                          : (has_info_ ? camera_info_.header.frame_id : "camera");
+    if (has_info_ && !camera_info_.header.frame_id.empty()) {
+      header.frame_id = camera_info_.header.frame_id;
+    } else if (!msg->header.frame_id.empty()) {
+      header.frame_id = msg->header.frame_id;
+    } else {
+      header.frame_id = fallback_frame_;
+    }
 
     cv::Mat hsv;
     cv::cvtColor(cv_ptr->image, hsv, cv::COLOR_BGR2HSV);
@@ -214,6 +221,11 @@ class FtDetector {
               ? cv::Mat()
               : cv::Mat(1, static_cast<int>(camera_info_.D.size()), CV_64F,
                         const_cast<double*>(camera_info_.D.data())).clone();
+    } else if (fallback_K_.size() == 9) {
+      K = cv::Mat(3, 3, CV_64F, fallback_K_.data()).clone();
+      if (!fallback_D_.empty()) {
+        D = cv::Mat(1, static_cast<int>(fallback_D_.size()), CV_64F, fallback_D_.data()).clone();
+      }
     }
 
     int id = 0;
@@ -327,6 +339,8 @@ class FtDetector {
   double small_w_ = 0.120, small_h_ = 0.125;
   double large_gap_ratio_ = 1.4;
   double min_aspect_ = 1.5, max_aspect_ = 12.0, min_fill_ = 0.35;
+  std::string fallback_frame_ = "camera";
+  std::vector<double> fallback_K_, fallback_D_;
   sensor_msgs::CameraInfo camera_info_;
   ft_detector::DetectorConfig cfg_;
   ros::Subscriber image_sub_, info_sub_;

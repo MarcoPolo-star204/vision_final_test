@@ -30,3 +30,8 @@ ft_detector:
   max_angle_diff: 10.0
   max_height_diff: 0.4
   max_gap: 600.0
+
+  # fallback only if a bag has no camera_info
+  fallback_frame: camera
+  fallback_camera_matrix: [600.0, 0.0, 320.0, 0.0, 600.0, 240.0, 0.0, 0.0, 1.0]
+  fallback_distortion: [0.0, 0.0, 0.0, 0.0, 0.0]
