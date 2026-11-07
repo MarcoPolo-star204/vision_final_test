@@ -2,12 +2,10 @@
 #include <ft_msgs/Track.h>
 #include <ft_msgs/TargetSelect.h>
 
-/*
- * ft_selector_node.cpp
- * ------------------------------------------------------------------
- * 基础版目标选择：把 /ft/track 转成 /ft/target。
- * 当前只做“跟踪有效就有效”，不做多车选择/旋转模型（那是进阶）。
- */
+// ft_selector_node.cpp
+// ------------------------------------------------------------------
+// 基础版目标选择：把 /ft/track 转成 /ft/target。
+// 当前只做“跟踪有效就有效”，不做多车选择/旋转模型（那是进阶）。
 class FtSelector {
  public:
   FtSelector(ros::NodeHandle& nh, ros::NodeHandle& pnh) {

@@ -20,24 +20,22 @@
 #include <string>
 #include <vector>
 
-/*
- * ft_detector_node.cpp
- * ------------------------------------------------------------------
- * 职责：读相机压缩图 -> 找红/蓝灯条 -> 两两配对 -> solvePnP 算位姿
- *       -> 发布 /ft/detection、/ft/debug/image、camera->armor TF。
- *
- * 数据流：
- *   /hk_camera/image_raw/compressed
- *        -> cv_bridge 解成 cv::Mat(BGR)
- *        -> HSV 阈值（红跨 0 度，要两段）
- *        -> 竖向灯条轮廓
- *        -> 同一块装甲板的左右灯条配对
- *        -> solvePnP（物体点是米制，图像点是像素）
- *        -> DetectionArray + debug 图 + TF
- *
- * 约定：所有消息的 header.stamp 必须用输入图像的时间戳，
- *       不能用 ros::Time::now()，否则 rosbag 回放会乱。
- */
+// ft_detector_node.cpp
+// ------------------------------------------------------------------
+// 职责：读相机压缩图 -> 找红/蓝灯条 -> 两两配对 -> solvePnP 算位姿
+// -> 发布 /ft/detection、/ft/debug/image、camera->armor TF。
+//
+// 数据流：
+// /hk_camera/image_raw/compressed
+// -> cv_bridge 解成 cv::Mat(BGR)
+// -> HSV 阈值（红跨 0 度，要两段）
+// -> 竖向灯条轮廓
+// -> 同一块装甲板的左右灯条配对
+// -> solvePnP（物体点是米制，图像点是像素）
+// -> DetectionArray + debug 图 + TF
+//
+// 约定：所有消息的 header.stamp 必须用输入图像的时间戳，
+// 不能用 ros::Time::now()，否则 rosbag 回放会乱。
 namespace {
 struct LightBar {
   cv::RotatedRect rect;

@@ -6,20 +6,18 @@
 #include <algorithm>
 #include <cmath>
 
-/*
- * ft_tracker_node.cpp
- * ------------------------------------------------------------------
- * 职责：订阅 /ft/detection，做单目标 Kalman 跟踪，输出 /ft/track。
- *
- * 状态： [x, y, z, vx, vy, vz]（相机系，米/米每秒）
- * 观测： [x, y, z]
- * 预测： position_predict = position + velocity * T（T 为提前量）
- *
- * 关键点：
- *   - dt 用两帧图像时间戳相减，不用 now()；
- *   - 丢检时继续 predict，但 tracking=false；
- *   - 连续丢检超过 max_lost 或外推超过 2 m，就 reset，不能无限外推。
- */
+// ft_tracker_node.cpp
+// ------------------------------------------------------------------
+// 职责：订阅 /ft/detection，做单目标 Kalman 跟踪，输出 /ft/track。
+//
+// 状态： [x, y, z, vx, vy, vz]（相机系，米/米每秒）
+// 观测： [x, y, z]
+// 预测： position_predict = position + velocity * T（T 为提前量）
+//
+// 关键点：
+// - dt 用两帧图像时间戳相减，不用 now()；
+// - 丢检时继续 predict，但 tracking=false；
+// - 连续丢检超过 max_lost 或外推超过 2 m，就 reset，不能无限外推。
 class FtTracker {
  public:
   FtTracker(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
