@@ -180,3 +180,9 @@ f6ddb74 Clamp tracker prediction and reset after repeated misses
 ```
 
 远程仓库地址待定；提交前打 tag `vision-final-test-submit`。
+
+## 远程仓库
+
+- GitHub: https://github.com/MarcoPolo-star204/vision_final_test
+- 默认分支: `main`
+- 提交 tag: `vision-final-test-submit`（最终版完成后打）
