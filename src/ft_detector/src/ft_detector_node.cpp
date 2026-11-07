@@ -118,15 +118,15 @@ class FtDetector {
 
   // 颜色分割：红色在 HSV 色环上跨 0 度，所以要 [0,10] 和 [170,180] 两段再合并。
   // 蓝色只有一段。S/V 下限由 dynamic_reconfigure 在线调。
-  void buildMasks(const cv::Mat& hsv, cv::Mat& red_mask, cv::Mat& blue_mask) {
-    cv::Mat r1, r2;
-    cv::inRange(hsv, cv::Scalar(cfg_.red_h_min, cfg_.s_min, cfg_.v_min),
-                cv::Scalar(cfg_.red_h_max, 255, 255), r1);
-    cv::inRange(hsv, cv::Scalar(cfg_.red_h_min2, cfg_.s_min, cfg_.v_min),
-                cv::Scalar(cfg_.red_h_max2, 255, 255), r2);
-    cv::bitwise_or(r1, r2, red_mask);
-    cv::inRange(hsv, cv::Scalar(cfg_.blue_h_min, cfg_.s_min, cfg_.v_min),
-                cv::Scalar(cfg_.blue_h_max, 255, 255), blue_mask);
+  void buildMasks(const cv::Mat& hsv, cv::Mat& red_mask, cv::Mat& blue_mask) {  // 输入 HSV 图，输出红/蓝两张黑白 mask
+    cv::Mat r1, r2;  // r1=红色第一段，r2=红色第二段（红色跨 0 度）
+    cv::inRange(hsv, cv::Scalar(cfg_.red_h_min, cfg_.s_min, cfg_.v_min),  // 红色第一段：H 在下限附近
+                cv::Scalar(cfg_.red_h_max, 255, 255), r1);  // S/V 上限固定 255，只卡下限
+    cv::inRange(hsv, cv::Scalar(cfg_.red_h_min2, cfg_.s_min, cfg_.v_min),  // 红色第二段：H 在 170~180
+                cv::Scalar(cfg_.red_h_max2, 255, 255), r2);  // 同样只卡 S/V 下限
+    cv::bitwise_or(r1, r2, red_mask);  // 两段红色合并成一张 red_mask
+    cv::inRange(hsv, cv::Scalar(cfg_.blue_h_min, cfg_.s_min, cfg_.v_min),  // 蓝色只有一段：H 100~130
+                cv::Scalar(cfg_.blue_h_max, 255, 255), blue_mask);  // 输出蓝 mask
   }
 
   // 从颜色 mask 里提取“竖直灯条”。
