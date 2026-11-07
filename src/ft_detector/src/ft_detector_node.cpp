@@ -16,7 +16,6 @@
 #include <boost/bind.hpp>
 #include <algorithm>
 #include <cmath>
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -40,10 +39,22 @@ namespace {
 struct LightBar {
   cv::RotatedRect rect;
   cv::Point2f center;
-  float width = 0.f;
-  float height = 0.f;
-  float angle = 0.f;
+  float width;
+  float height;
+  float angle;
 };
+
+// 一对灯条：left/right 是 bars 数组下标
+struct BarPair {
+  int left;
+  int right;
+  bool is_large;
+};
+
+// 按 x 从小到大排序（替代 lambda，初学者更容易看懂）
+bool comparePointX(const cv::Point2f& a, const cv::Point2f& b) {
+  return a.x < b.x;
+}
 
 cv::Point2f rotatePoint(const cv::Point2f& p, float angle_deg) {
   const float a = angle_deg * static_cast<float>(CV_PI) / 180.f;
@@ -82,11 +93,16 @@ class FtDetector {
     info_sub_ = nh.subscribe(info_topic_, 1, &FtDetector::infoCallback, this);
     debug_pub_ = nh.advertise<sensor_msgs::Image>(debug_topic_, 1);
     det_pub_ = nh.advertise<ft_msgs::DetectionArray>(det_topic_, 10);
-    tf_broadcaster_.reset(new tf2_ros::TransformBroadcaster());
+    tf_broadcaster_ = new tf2_ros::TransformBroadcaster();
 
-    dr_server_.reset(new dynamic_reconfigure::Server<ft_detector::DetectorConfig>(pnh));
+    dr_server_ = new dynamic_reconfigure::Server<ft_detector::DetectorConfig>(pnh);
     dr_server_->setCallback(boost::bind(&FtDetector::reconfigureCallback, this, _1, _2));
     ROS_INFO_STREAM("ft_detector: image=" << image_topic_ << ", info=" << info_topic_);
+  }
+
+  ~FtDetector() {
+    delete tf_broadcaster_;
+    delete dr_server_;
   }
 
  private:
@@ -127,7 +143,8 @@ class FtDetector {
 
     std::vector<std::vector<cv::Point>> contours;
     cv::findContours(mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-    for (const auto& c : contours) {
+    for (size_t ci = 0; ci < contours.size(); ++ci) {
+      const std::vector<cv::Point>& c = contours[ci];
       const double area = cv::contourArea(c);
       if (area < cfg_.min_area) continue;
       cv::RotatedRect rect = cv::minAreaRect(c);
@@ -185,9 +202,8 @@ class FtDetector {
 
   // 一帧可能有多个灯条，这里做贪心配对：每根灯条最多用一次，
   // 选“中心高度差 + 角度差”得分最小的组合，避免一根灯条被重复配对。
-  void pairBars(const std::vector<LightBar>& bars, std::vector<std::pair<int, int>>& pairs,
-                std::vector<bool>& is_large) {
-    std::vector<bool> used(bars.size(), false);
+  void pairBars(const std::vector<LightBar>& bars, std::vector<BarPair>& pairs) {
+    std::vector<char> used(bars.size(), 0);
     for (size_t i = 0; i < bars.size(); ++i) {
       if (used[i]) continue;
       int best = -1;
@@ -204,8 +220,11 @@ class FtDetector {
       if (best >= 0) {
         used[i] = true;
         used[best] = true;
-        pairs.emplace_back(static_cast<int>(i), best);
-        is_large.push_back(best_large);
+        BarPair p;
+        p.left = static_cast<int>(i);
+        p.right = best;
+        p.is_large = best_large;
+        pairs.push_back(p);
       }
     }
   }
@@ -218,9 +237,7 @@ class FtDetector {
     cv::Point2f pts[4];
     bar.rect.points(pts);
     std::vector<cv::Point2f> p(pts, pts + 4);
-    std::sort(p.begin(), p.end(), [](const cv::Point2f& u, const cv::Point2f& v) {
-      return u.x < v.x;
-    });
+    std::sort(p.begin(), p.end(), comparePointX);
     cv::Point2f a = p[0], b = p[1];
     if (take_left) {
       left_top = a.y < b.y ? a : b;
@@ -286,13 +303,12 @@ class FtDetector {
     // 3) 红/蓝分别处理；id 只在当前帧内唯一，不要求跨帧跟踪 ID。
     int id = 0;
     for (int color = 0; color < 2; ++color) {
-      const auto& bars = (color == 0) ? red_bars : blue_bars;
-      std::vector<std::pair<int, int>> pairs;
-      std::vector<bool> large_flags;
-      pairBars(bars, pairs, large_flags);
+      const std::vector<LightBar>& bars = (color == 0) ? red_bars : blue_bars;
+      std::vector<BarPair> pairs;
+      pairBars(bars, pairs);
       for (size_t k = 0; k < pairs.size(); ++k) {
-        const LightBar& left = bars[pairs[k].first];
-        const LightBar& right = bars[pairs[k].second];
+        const LightBar& left = bars[pairs[k].left];
+        const LightBar& right = bars[pairs[k].right];
         const LightBar& b1 = left.center.x < right.center.x ? left : right;
         const LightBar& b2 = left.center.x < right.center.x ? right : left;
 
@@ -302,7 +318,7 @@ class FtDetector {
         barCorners(b2, lt2, lb2, rt2, rb2, false);
 
         std::vector<cv::Point2f> img_pts = {lt, rt2, rb2, lb};
-        const bool is_large = large_flags[k];
+        const bool is_large = pairs[k].is_large;
         const double W = is_large ? large_w_ : small_w_;
         const double H = is_large ? large_h_ : small_h_;
         std::vector<cv::Point3f> obj_pts = {
@@ -411,7 +427,8 @@ class FtDetector {
         //    3D 位置距离小于 merge_distance 就当成重复，丢掉后出现的那个。
         bool duplicate = false;
         if (has_info_) {
-          for (const auto& existing : out.detections) {
+          for (size_t ei = 0; ei < out.detections.size(); ++ei) {
+            const ft_msgs::Detection& existing = out.detections[ei];
             if (existing.is_red != det.is_red) continue;
             const double dx = existing.pose.position.x - det.pose.position.x;
             const double dy = existing.pose.position.y - det.pose.position.y;
@@ -467,8 +484,8 @@ class FtDetector {
   ft_detector::DetectorConfig cfg_;
   ros::Subscriber image_sub_, info_sub_;
   ros::Publisher debug_pub_, det_pub_;
-  std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
-  std::unique_ptr<dynamic_reconfigure::Server<ft_detector::DetectorConfig>> dr_server_;
+  tf2_ros::TransformBroadcaster* tf_broadcaster_;
+  dynamic_reconfigure::Server<ft_detector::DetectorConfig>* dr_server_;
 };
 
 int main(int argc, char** argv) {
