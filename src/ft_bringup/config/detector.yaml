@@ -1,29 +1,38 @@
+# ============================================================
+# 检测节点参数（由 vision_final.launch 用 rosparam 加载）
+# 改完参数要重新 launch；想在线调就用 rqt_reconfigure。
+# ============================================================
 ft_detector:
-  image_topic: /hk_camera/image_raw/compressed
-  camera_info_topic: /hk_camera/camera_info
-  detection_topic: /ft/detection
-  debug_topic: /ft/debug/image
-  queue_size: 2
+  # ---------- 输入/输出话题 ----------
+  image_topic: /hk_camera/image_raw/compressed   # bag 里的压缩图
+  camera_info_topic: /hk_camera/camera_info     # 相机内参 K/D
+  detection_topic: /ft/detection                # 检测结果数组
+  debug_topic: /ft/debug/image                  # 叠加框/ID/坐标轴的调试图
+  queue_size: 2                                 # 图像队列，别太大，避免积压旧帧
 
-  # armor geometry (m)
+  # ---------- 装甲板实际尺寸（单位：米） ----------
   large_armor_width: 0.235
   large_armor_height: 0.127
   small_armor_width: 0.120
   small_armor_height: 0.125
-  large_gap_ratio: 1.4
-  max_gap_ratio: 6.0
-  merge_distance: 0.25
-  max_distance: 8.0
-  min_distance: 1.0
-  max_reproj_error: 30.0
-  max_body_v: 90.0
 
-  # light bar shape filter
-  min_aspect: 1.5
-  max_aspect: 12.0
-  min_fill: 0.35
+  # ---------- 灯条配对门限 ----------
+  large_gap_ratio: 1.4      # gap / 灯条高度 > 该值 -> 判为大装甲板
+  max_gap_ratio: 6.0        # gap / 灯条高度 > 该值 -> 认为是跨板误配，拒绝
+  merge_distance: 0.25      # 同一块板被重复检出时，3D 距离小于该值就合并
 
-  # dynamic_reconfigure defaults
+  # ---------- 位姿合法性过滤 ----------
+  max_distance: 8.0         # PnP z 超过 8 m -> 丢弃
+  min_distance: 1.0         # PnP z 小于 1 m -> 丢弃
+  max_reproj_error: 30.0    # 四角点重投影平均误差 > 30 px -> 丢弃
+  max_body_v: 90.0          # 配对区域平均 V 太亮（反光/地面）-> 丢弃
+
+  # ---------- 灯条轮廓形状过滤 ----------
+  min_aspect: 1.5           # 灯条高/宽 最小值
+  max_aspect: 12.0          # 灯条高/宽 最大值
+  min_fill: 0.35            # 轮廓面积 / 外接矩形面积
+
+  # ---------- dynamic_reconfigure 默认值 ----------
   red_h_min: 0
   red_h_max: 10
   red_h_min2: 170
@@ -37,7 +46,7 @@ ft_detector:
   max_height_diff: 0.6
   max_gap: 600.0
 
-  # fallback only if a bag has no camera_info
+  # ---------- 没有 camera_info 时的回退值 ----------
   fallback_frame: camera
   fallback_camera_matrix: [600.0, 0.0, 320.0, 0.0, 600.0, 240.0, 0.0, 0.0, 1.0]
   fallback_distortion: [0.0, 0.0, 0.0, 0.0, 0.0]

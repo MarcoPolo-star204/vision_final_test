@@ -1,14 +1,24 @@
 <launch>
+  <!-- 是否使用 bag 的 /clock；回放 bag 时一般设 true -->
   <arg name="use_sim_time" default="true"/>
+  <!-- 没有显示器/只想跑数据时用 rviz:=false -->
   <arg name="rviz" default="true"/>
   <param name="/use_sim_time" value="$(arg use_sim_time)"/>
+
+  <!-- 参数文件：话题、HSV、配对、PnP、跟踪 Q/R 都在这里 -->
   <rosparam command="load" file="$(find ft_bringup)/config/detector.yaml"/>
   <rosparam command="load" file="$(find ft_bringup)/config/tracker.yaml"/>
 
+  <!-- 检测：图像 -> HSV -> 灯条 -> 配对 -> PnP -> /ft/detection -->
   <node pkg="ft_detector" type="ft_detector_node" name="ft_detector" output="screen"/>
+
+  <!-- 跟踪：/ft/detection -> Kalman -> /ft/track -->
   <node pkg="ft_tracker" type="ft_tracker_node" name="ft_tracker" output="screen"/>
+
+  <!-- 目标选择：/ft/track -> /ft/target -->
   <node pkg="ft_selector" type="ft_selector_node" name="ft_selector" output="screen"/>
 
+  <!-- RViz：固定坐标系默认 camera，显示 TF 和预测 marker -->
   <node if="$(arg rviz)" pkg="rviz" type="rviz" name="rviz"
         args="-d $(find ft_bringup)/rviz/vision_final.rviz"/>
 </launch>

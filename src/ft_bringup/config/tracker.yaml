@@ -1,10 +1,14 @@
+# ============================================================
+# 跟踪节点参数
+# ============================================================
 ft_tracker:
   detection_topic: /ft/detection
   track_topic: /ft/track
   marker_topic: /ft/debug/marker
-  T: 0.1
-  gate: 0.8
-  q_pos: 0.01
-  q_vel: 0.1
-  r_meas: 0.02
-  max_lost: 1.0
+
+  T: 0.1          # 提前量（秒）：输出 position + velocity * T
+  gate: 0.8       # 数据关联门限（米）：预测位置和检测距离超过它就不认
+  q_pos: 0.01     # 位置过程噪声 Q
+  q_vel: 0.1      # 速度过程噪声 Q
+  r_meas: 0.02    # 观测噪声 R
+  max_lost: 1.0   # 连续丢失超过该时间（秒）就删除轨迹
