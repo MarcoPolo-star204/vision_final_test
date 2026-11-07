@@ -590,4 +590,603 @@ class FtDetector {
 // barCorners 结束
   }
 
-// 本批到 barCorners 结束；下一批：imageCallback 的 1–8 步。
+
+// ============================================================
+// 第 2 批：imageCallback 1–8 步 + 成员变量 + main
+// ============================================================
+
+// 主回调：每来一帧压缩图，走完整条检测链路
+  void imageCallback(const sensor_msgs::CompressedImageConstPtr& msg) {
+
+// 定义一个 cv_bridge 图像指针，用来接解码结果
+    cv_bridge::CvImagePtr cv_ptr;
+
+// try 保护解码，失败不要让节点崩
+    try {
+
+// 把压缩图解码成 bgr8 的 cv::Mat
+      cv_ptr = cv_bridge::toCvCopy(msg, "bgr8");
+
+// 捕获 cv_bridge 异常
+    } catch (const cv_bridge::Exception& e) {
+
+// 打印错误，1 秒最多一次，避免刷屏
+      ROS_ERROR_STREAM_THROTTLE(1.0, "cv_bridge: " << e.what());
+
+// 解码失败，直接返回
+      return;
+
+// catch 结束
+    }
+
+// 组装消息头
+    std_msgs::Header header;
+
+// 时间戳必须用图像自带的，不能用 now
+    header.stamp = msg->header.stamp;
+
+// 如果有 camera_info 且 frame 不为空
+    if (has_info_ && !camera_info_.header.frame_id.empty()) {
+
+// 优先用 camera_info 的 frame
+      header.frame_id = camera_info_.header.frame_id;
+
+// 否则如果图像自己有 frame
+    } else if (!msg->header.frame_id.empty()) {
+
+// 用图像的 frame
+      header.frame_id = msg->header.frame_id;
+
+// 都没有
+    } else {
+
+// 用 YAML 里的回退 frame
+      header.frame_id = fallback_frame_;
+
+// if 结束
+    }
+
+// 定义 HSV 图
+    cv::Mat hsv;
+
+// BGR 转 HSV
+    cv::cvtColor(cv_ptr->image, hsv, cv::COLOR_BGR2HSV);
+
+// 定义红/蓝 mask
+    cv::Mat red_mask, blue_mask;
+
+// 调 buildMasks 得到两张 mask
+    buildMasks(hsv, red_mask, blue_mask);
+
+// 定义红/蓝灯条数组
+    std::vector<LightBar> red_bars, blue_bars;
+
+// 从红 mask 找灯条
+    detectBars(red_mask, red_bars);
+
+// 从蓝 mask 找灯条
+    detectBars(blue_mask, blue_bars);
+
+// debug 图要 clone，不能画到原图
+    cv::Mat debug = cv_ptr->image.clone();
+
+// 创建检测数组
+    ft_msgs::DetectionArray out;
+
+// 检测数组的 header 与图像一致
+    out.header = header;
+
+// 定义内参矩阵 K 和畸变 D
+    cv::Mat K, D;
+
+// 有 camera_info 就用它
+    if (has_info_) {
+
+// 把 camera_info 的 K 拷贝成 3x3 double 矩阵
+      K = cv::Mat(3, 3, CV_64F, const_cast<double*>(camera_info_.K.data())).clone();
+
+// 如果有畸变系数
+      D = camera_info_.D.empty()
+
+// 没有畸变就传空 Mat
+              ? cv::Mat()
+
+// 有畸变就拷贝成 1xN
+              : cv::Mat(1, static_cast<int>(camera_info_.D.size()), CV_64F,
+                        const_cast<double*>(camera_info_.D.data())).clone();
+
+// 没有 camera_info，但 YAML 有 9 个内参
+    } else if (fallback_K_.size() == 9) {
+
+// 用 YAML 的 K
+      K = cv::Mat(3, 3, CV_64F, fallback_K_.data()).clone();
+
+// 如果 YAML 有畸变
+      if (!fallback_D_.empty()) {
+
+// 用 YAML 的 D
+        D = cv::Mat(1, static_cast<int>(fallback_D_.size()), CV_64F, fallback_D_.data()).clone();
+
+// if 结束
+      }
+
+// if 结束
+    }
+
+// 当前帧检测编号，从 0 开始
+    int id = 0;
+
+// color=0 红色，color=1 蓝色
+    for (int color = 0; color < 2; ++color) {
+
+// 根据 color 选红或蓝灯条数组
+      const std::vector<LightBar>& bars = (color == 0) ? red_bars : blue_bars;
+
+// 存放这一种颜色的配对
+      std::vector<BarPair> pairs;
+
+// 调 pairBars 做配对
+      pairBars(bars, pairs);
+
+// 遍历每一对
+      for (size_t k = 0; k < pairs.size(); ++k) {
+
+// 取左灯条
+        const LightBar& left = bars[pairs[k].left];
+
+// 取右灯条
+        const LightBar& right = bars[pairs[k].right];
+
+// 保证 b1 在左边
+        const LightBar& b1 = left.center.x < right.center.x ? left : right;
+
+// 保证 b2 在右边
+        const LightBar& b2 = left.center.x < right.center.x ? right : left;
+
+// 定义四个角点
+        cv::Point2f lt, lb, rt, rb;
+
+// 从左灯条取左侧两个角
+        barCorners(b1, lt, lb, rt, rb, true);
+
+// 定义右灯条四个临时角点
+        cv::Point2f lt2, lb2, rt2, rb2;
+
+// 从右灯条取右侧两个角
+        barCorners(b2, lt2, lb2, rt2, rb2, false);
+
+// 按左上、右上、右下、左下排好图像点
+        std::vector<cv::Point2f> img_pts = {lt, rt2, rb2, lb};
+
+// 这一对是不是大装甲板
+        const bool is_large = pairs[k].is_large;
+
+// 大板用大宽度，小板用小宽度
+        const double W = is_large ? large_w_ : small_w_;
+
+// 大板用大高度，小板用小高度
+        const double H = is_large ? large_h_ : small_h_;
+
+// 物体点：左上、右上、右下、左下，单位米
+        std::vector<cv::Point3f> obj_pts = {
+
+// 左上
+            {0.f, 0.f, 0.f}, {static_cast<float>(W), 0.f, 0.f},
+
+// 右上、右下
+            {static_cast<float>(W), static_cast<float>(H), 0.f},
+
+// 左下
+            {0.f, static_cast<float>(H), 0.f}};
+
+// 求四个角点的包围框
+        cv::Rect pair_box = cv::boundingRect(img_pts);
+
+// 横向往里缩四分之一
+        const int mx = std::max(1, pair_box.width / 4);
+
+// 纵向往里缩四分之一
+        const int my = std::max(1, pair_box.height / 4);
+
+// 左边往里缩
+        pair_box.x += mx; pair_box.y += my;
+
+// 宽高各缩 2*mx / 2*my
+        pair_box.width = std::max(1, pair_box.width - 2 * mx);
+
+// 高度也缩
+        pair_box.height = std::max(1, pair_box.height - 2 * my);
+
+// 检查缩放后的框还在图像内
+        if (pair_box.x >= 0 && pair_box.y >= 0 &&
+
+// 右边界不越界
+            pair_box.x + pair_box.width <= hsv.cols &&
+
+// 下边界不越界
+            pair_box.y + pair_box.height <= hsv.rows) {
+
+// 算框内平均 V（亮度）
+          const double body_v = cv::mean(hsv(pair_box))[2];
+
+// 太亮认为是反光，跳过
+          if (body_v > max_body_v_) { ++id; continue; }
+
+// if 结束
+        }
+
+// 红色画红框，蓝色画蓝框
+        cv::Scalar color_draw = (color == 0) ? cv::Scalar(0, 0, 255) : cv::Scalar(255, 0, 0);
+
+// 画上边
+        cv::line(debug, lt, rt2, color_draw, 2);
+
+// 画右边
+        cv::line(debug, rt2, rb2, color_draw, 2);
+
+// 画下边
+        cv::line(debug, rb2, lb, color_draw, 2);
+
+// 画左边
+        cv::line(debug, lb, lt, color_draw, 2);
+
+// 定义灯条四点数组
+        cv::Point2f pts[4];
+
+// 取左灯条四个角
+        left.rect.points(pts);
+
+// 画左灯条绿色框
+        for (int i = 0; i < 4; ++i) cv::line(debug, pts[i], pts[(i + 1) % 4], cv::Scalar(0, 255, 0), 1);
+
+// 创建一条检测
+        ft_msgs::Detection det;
+
+// 帧内 id
+        det.id = static_cast<uint32_t>(id);
+
+// 颜色
+        det.is_red = (color == 0);
+
+// 大小
+        det.is_large_armor = is_large;
+
+// 有内参才做 PnP
+        if (has_info_ && K.rows == 3) {
+
+// 旋转向量和平移向量
+          cv::Vec3d rvec, tvec;
+
+// 优先用 IPPE
+          try {
+
+// 平面目标 PnP
+            cv::solvePnP(obj_pts, img_pts, K, D, rvec, tvec, false, cv::SOLVEPNP_IPPE);
+
+// IPPE 失败
+          } catch (const cv::Exception& e1) {
+
+// 退回 ITERATIVE
+            try {
+
+// 迭代法 PnP
+              cv::solvePnP(obj_pts, img_pts, K, D, rvec, tvec, false, cv::SOLVEPNP_ITERATIVE);
+
+// 两种都失败
+            } catch (const cv::Exception& e2) {
+
+// 打印警告
+              ROS_WARN_STREAM_THROTTLE(1.0, "solvePnP failed: " << e1.what() << " / " << e2.what());
+
+// 跳过这一对
+              ++id;
+              continue;
+
+// catch 结束
+            }
+
+// catch 结束
+          }
+
+// 距离太近/太远跳过
+          if (tvec[2] < min_distance_ || tvec[2] > max_distance_) { ++id; continue; }
+
+// 存放重投影点
+          std::vector<cv::Point2f> reproj;
+
+// 把物体点投回图像
+          cv::projectPoints(obj_pts, rvec, tvec, K, D, reproj);
+
+// 误差累加器
+          double err = 0.0;
+
+// 遍历四个点
+          for (size_t pi = 0; pi < reproj.size(); ++pi) {
+
+// 累加重投影误差
+            err += cv::norm(reproj[pi] - img_pts[pi]);
+
+// 循环结束
+          }
+
+// 取平均误差
+          err /= static_cast<double>(reproj.size());
+
+// 误差太大跳过
+          if (err > max_reproj_error_) { ++id; continue; }
+
+// 填位置 x
+          det.pose.position.x = tvec[0];
+
+// 填位置 y
+          det.pose.position.y = tvec[1];
+
+// 填位置 z
+          det.pose.position.z = tvec[2];
+
+// 旋转矩阵
+          cv::Mat R;
+
+// 旋转向量转旋转矩阵
+          cv::Rodrigues(rvec, R);
+
+// 用旋转矩阵构造 tf2 矩阵
+          tf2::Matrix3x3 m(R.at<double>(0, 0), R.at<double>(0, 1), R.at<double>(0, 2),
+
+// 第二行
+                           R.at<double>(1, 0), R.at<double>(1, 1), R.at<double>(1, 2),
+
+// 第三行
+                           R.at<double>(2, 0), R.at<double>(2, 1), R.at<double>(2, 2));
+
+// 四元数
+          tf2::Quaternion q;
+
+// 从矩阵取四元数
+          m.getRotation(q);
+
+// 归一化
+          q.normalize();
+
+// 填四元数 x
+          det.pose.orientation.x = q.x();
+
+// 填四元数 y
+          det.pose.orientation.y = q.y();
+
+// 填四元数 z
+          det.pose.orientation.z = q.z();
+
+// 填四元数 w
+          det.pose.orientation.w = q.w();
+
+// 坐标轴三个端点
+          std::vector<cv::Point3f> axes = {{0.f, 0.f, 0.f}, {0.03f, 0.f, 0.f},
+
+// 第二行
+                                           {0.f, 0.03f, 0.f}, {0.f, 0.f, 0.03f}};
+
+// 投影后的坐标轴
+          std::vector<cv::Point2f> proj;
+
+// 把坐标轴投回图像
+          cv::projectPoints(axes, rvec, tvec, K, D, proj);
+
+// 画 x 轴红色
+          cv::line(debug, proj[0], proj[1], cv::Scalar(0, 0, 255), 2);
+
+// 画 y 轴绿色
+          cv::line(debug, proj[0], proj[2], cv::Scalar(0, 255, 0), 2);
+
+// 画 z 轴蓝色
+          cv::line(debug, proj[0], proj[3], cv::Scalar(255, 0, 0), 2);
+
+// TF 变换
+          geometry_msgs::TransformStamped tf;
+
+// TF 头
+          tf.header = header;
+
+// 子坐标系 armor_id
+          tf.child_frame_id = "armor_" + std::to_string(id);
+
+// 平移 x
+          tf.transform.translation.x = tvec[0];
+
+// 平移 y
+          tf.transform.translation.y = tvec[1];
+
+// 平移 z
+          tf.transform.translation.z = tvec[2];
+
+// 旋转
+          tf.transform.rotation = det.pose.orientation;
+
+// 发 TF
+          tf_broadcaster_->sendTransform(tf);
+
+// if 结束
+        }
+
+// 在调试图上写 L/S + R/B + id
+        cv::putText(debug, (is_large ? "L" : "S") + std::string(color == 0 ? "R" : "B") +
+
+// 第二行
+                               " " + std::to_string(id),
+
+// 文字位置
+                    cv::Point(static_cast<int>(lt.x), static_cast<int>(lt.y) - 6),
+
+// 字体
+                    cv::FONT_HERSHEY_SIMPLEX, 0.5, color_draw, 1);
+
+// 重复标记
+        bool duplicate = false;
+
+// 有内参才做 3D 去重
+        if (has_info_) {
+
+// 遍历已有检测
+          for (size_t ei = 0; ei < out.detections.size(); ++ei) {
+
+// 取已有检测
+            const ft_msgs::Detection& existing = out.detections[ei];
+
+// 颜色不同不算重复
+            if (existing.is_red != det.is_red) continue;
+
+// x 差
+            const double dx = existing.pose.position.x - det.pose.position.x;
+
+// y 差
+            const double dy = existing.pose.position.y - det.pose.position.y;
+
+// z 差
+            const double dz = existing.pose.position.z - det.pose.position.z;
+
+// 距离小于阈值算重复
+            if (std::sqrt(dx * dx + dy * dy + dz * dz) < merge_distance_) {
+
+// 标记重复
+              duplicate = true;
+
+// 跳出
+              break;
+
+// if 结束
+            }
+
+// 循环结束
+          }
+
+// if 结束
+        }
+
+// 重复就跳过
+        if (duplicate) { ++id; continue; }
+
+// 放进检测数组
+        out.detections.push_back(det);
+
+// id 自增
+        ++id;
+
+// 配对循环结束
+      }
+
+// 颜色循环结束
+    }
+
+// 没有 camera_info
+    if (!has_info_) {
+
+// 在调试图上提示
+      cv::putText(debug, "no camera_info: PnP skipped", cv::Point(20, 30),
+
+// 字体
+                  cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 0, 255), 2);
+
+// if 结束
+    }
+
+// 调试图消息
+    sensor_msgs::Image debug_msg;
+
+// cv::Mat 转 ROS Image
+    cv_bridge::CvImage(header, "bgr8", debug).toImageMsg(debug_msg);
+
+// 发布调试图
+    debug_pub_.publish(debug_msg);
+
+// 发布检测数组
+    det_pub_.publish(out);
+
+// 回调结束
+  }
+
+// 话题名
+  std::string image_topic_, info_topic_, det_topic_, debug_topic_;
+
+// 图像队列
+  int queue_size_ = 2;
+
+// 是否收到 camera_info
+  bool has_info_ = false;
+
+// 大板宽高
+  double large_w_ = 0.235, large_h_ = 0.127;
+
+// 小板宽高
+  double small_w_ = 0.120, small_h_ = 0.125;
+
+// 大小板比例
+  double large_gap_ratio_ = 1.4;
+
+// 配对最大比例
+  double max_gap_ratio_ = 3.0;
+
+// 去重距离
+  double merge_distance_ = 0.25;
+
+// 最远距离
+  double max_distance_ = 8.0;
+
+// 最近距离
+  double min_distance_ = 1.0;
+
+// 重投影阈值
+  double max_reproj_error_ = 30.0;
+
+// 反光亮度
+  double max_body_v_ = 90.0;
+
+// 长宽比/填充率
+  double min_aspect_ = 1.5, max_aspect_ = 12.0, min_fill_ = 0.35;
+
+// 回退 frame
+  std::string fallback_frame_ = "camera";
+
+// 回退内参/畸变
+  std::vector<double> fallback_K_, fallback_D_;
+
+// 缓存 camera_info
+  sensor_msgs::CameraInfo camera_info_;
+
+// 动态参数
+  ft_detector::DetectorConfig cfg_;
+
+// 订阅者
+  ros::Subscriber image_sub_, info_sub_;
+
+// 发布者
+  ros::Publisher debug_pub_, det_pub_;
+
+// TF 广播器
+  tf2_ros::TransformBroadcaster* tf_broadcaster_;
+
+// 动态参数服务器
+  dynamic_reconfigure::Server<ft_detector::DetectorConfig>* dr_server_;
+
+// 类结束
+};
+
+// 主函数
+int main(int argc, char** argv) {
+
+// 初始化 ROS
+  ros::init(argc, argv, "ft_detector");
+
+// 全局/私有句柄
+  ros::NodeHandle nh, pnh("~");
+
+// 创建检测对象
+  FtDetector detector(nh, pnh);
+
+// 进入回调循环
+  ros::spin();
+
+// 正常退出
+  return 0;
+
+// main 结束
+}
