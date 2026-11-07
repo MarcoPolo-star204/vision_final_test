@@ -54,6 +54,7 @@ class FtDetector {
     pnh.param<double>("max_distance", max_distance_, 8.0);
     pnh.param<double>("min_distance", min_distance_, 1.0);
     pnh.param<double>("max_reproj_error", max_reproj_error_, 30.0);
+    pnh.param<double>("max_body_v", max_body_v_, 90.0);
     pnh.param<double>("min_aspect", min_aspect_, 1.5);
     pnh.param<double>("max_aspect", max_aspect_, 12.0);
     pnh.param<double>("min_fill", min_fill_, 0.35);
@@ -273,6 +274,20 @@ class FtDetector {
             {static_cast<float>(W), static_cast<float>(H), 0.f},
             {0.f, static_cast<float>(H), 0.f}};
 
+        // 真实装甲板中间是深色车身；地面反光/背景中间通常更亮。
+        cv::Rect pair_box = cv::boundingRect(img_pts);
+        const int mx = std::max(1, pair_box.width / 4);
+        const int my = std::max(1, pair_box.height / 4);
+        pair_box.x += mx; pair_box.y += my;
+        pair_box.width = std::max(1, pair_box.width - 2 * mx);
+        pair_box.height = std::max(1, pair_box.height - 2 * my);
+        if (pair_box.x >= 0 && pair_box.y >= 0 &&
+            pair_box.x + pair_box.width <= hsv.cols &&
+            pair_box.y + pair_box.height <= hsv.rows) {
+          const double body_v = cv::mean(hsv(pair_box))[2];
+          if (body_v > max_body_v_) { ++id; continue; }
+        }
+
         cv::Scalar color_draw = (color == 0) ? cv::Scalar(0, 0, 255) : cv::Scalar(255, 0, 0);
         cv::line(debug, lt, rt2, color_draw, 2);
         cv::line(debug, rt2, rb2, color_draw, 2);
@@ -389,6 +404,7 @@ class FtDetector {
   double max_distance_ = 8.0;
   double min_distance_ = 1.0;
   double max_reproj_error_ = 30.0;
+  double max_body_v_ = 90.0;
   double min_aspect_ = 1.5, max_aspect_ = 12.0, min_fill_ = 0.35;
   std::string fallback_frame_ = "camera";
   std::vector<double> fallback_K_, fallback_D_;
