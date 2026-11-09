@@ -15,11 +15,11 @@ cleanup() {
 }
 trap cleanup INT TERM EXIT
 
-roslaunch ft_bringup vision_final.launch rviz:=false use_sim_time:=false &
+roslaunch ft_bringup vision_final.launch rviz:=false use_sim_time:=false >/tmp/day1_launch.log 2>&1 &
 LAUNCH_PID=$!
 sleep 5
 
-rosbag play -s "$START" --rate 0.5 -l "$BAG" &
+rosbag play -s "$START" --rate 0.5 -l "$BAG" >/tmp/day1_bag.log 2>&1 &
 BAG_PID=$!
 
 echo
