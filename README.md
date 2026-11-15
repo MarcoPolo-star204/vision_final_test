@@ -120,7 +120,7 @@ dynamic_reconfigure: 修改 red_h_max/min_area 生效
 
 ## 已知限制
 
-- 还没有真实 bag，HSV、配对、`large_gap_ratio`、尺寸需要重新标定。
+- 真实 bag 已跑通；HSV、配对、`large_gap_ratio`、尺寸仍可继续细调。
 - `solvePnP` 使用 `SOLVEPNP_IPPE`，平面目标。
 - 跟踪只做单目标匀速模型；换面、旋转、多车选择属于进阶。
 - 检测 ID 只保证帧内唯一，不做跨帧关联。
@@ -140,8 +140,8 @@ dynamic_reconfigure: 修改 red_h_max/min_area 生效
 运行：
 
 ```bash
-roslaunch ft_bringup vision_final.launch rviz:=false use_sim_time:=false
-rosbag play -s 8 --rate 0.5 -l ~/catkin_ws/bags/blue_1.bag
+roslaunch ft_bringup vision_final.launch rviz:=false use_sim_time:=true
+rosbag play --clock -s 8 --rate 0.5 -l ~/catkin_ws/bags/blue_1.bag
 ```
 
 `blue_1.bag` 约 200 帧统计：
@@ -167,7 +167,7 @@ tracking=true 约 68 帧
 - 检测仍会跳到背景灯条，导致 `tracking` 频繁变 false；
 - `red_4.bag` 尚未调参；
 - 进阶 ONNX 模型是 FLOAT16，OpenCV 4.2 DNN 不支持，需要 ONNX Runtime；
-- 演示视频、Git 远程仓库尚未完成。
+- 演示视频已单独提交；Git 远程仓库和 tag 已完成。
 
 ## Git
 
@@ -179,10 +179,31 @@ f6ddb74 Clamp tracker prediction and reset after repeated misses
 516ebdc Reject detections with high PnP reprojection error
 ```
 
-远程仓库地址待定；提交前打 tag `vision-final-test-submit`。
+远程仓库：https://github.com/MarcoPolo-star204/vision_final_test
+
+最终 tag：`vision-final-test-submit`。
 
 ## 远程仓库
 
 - GitHub: https://github.com/MarcoPolo-star204/vision_final_test
 - 默认分支: `main`
-- 提交 tag: `vision-final-test-submit`（最终版完成后打）
+- 提交 tag: `vision-final-test-submit`
+
+
+## 提交材料
+
+- 代码：本仓库 + tag `vision-final-test-submit`
+- PPT/PDF：`视觉考核-21天逐日作战表.pptx/pdf`
+- 演示视频：单独提交
+- AI 记录：`ai_usage.md`
+- zip：`视觉-许驭程-3126003452.zip`
+
+演示视频命令：
+
+```bash
+roslaunch ft_bringup vision_final.launch rviz:=false use_sim_time:=true
+rosbag play --clock -s 8 --rate 0.5 -l ~/catkin_ws/bags/blue_1.bag
+rqt_image_view /ft/debug/image
+rostopic echo /ft/detection
+rostopic echo /ft/track
+```
