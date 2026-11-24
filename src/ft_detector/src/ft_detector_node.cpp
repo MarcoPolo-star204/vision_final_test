@@ -187,6 +187,9 @@ class FtDetector {
 
 // 读反光过滤亮度上限
     pnh.param<double>("max_body_v", max_body_v_, 90.0);
+    pnh.param<double>("max_pair_aspect", max_pair_aspect_, 5.0);
+    pnh.param<double>("max_pair_center_y_ratio", max_pair_center_y_ratio_, 0.52);
+    pnh.param<double>("max_pair_center_y_ratio_blue", max_pair_center_y_ratio_blue_, 0.80);
 
 // 读灯条最小长宽比
     pnh.param<double>("min_aspect", min_aspect_, 1.5);
@@ -781,6 +784,12 @@ class FtDetector {
 
 // 求四个角点的包围框
         cv::Rect pair_box = cv::boundingRect(img_pts);
+        // 过滤“地面反光/侧面灯条”：配对框太扁，或中心落在画面下方。
+        const float pair_aspect = static_cast<float>(pair_box.width) / std::max(1, pair_box.height);
+        if (pair_aspect > max_pair_aspect_) { ++id; continue; }
+        const float pair_cy = pair_box.y + pair_box.height * 0.5f;
+        const double max_cy_ratio = (color == 0) ? max_pair_center_y_ratio_ : max_pair_center_y_ratio_blue_;
+        if (pair_cy > hsv.rows * max_cy_ratio) { ++id; continue; }
 
 // 横向往里缩四分之一
         const int mx = std::max(1, pair_box.width / 4);
@@ -1139,6 +1148,9 @@ class FtDetector {
 
 // 反光亮度
   double max_body_v_ = 90.0;
+  double max_pair_aspect_ = 5.0;
+  double max_pair_center_y_ratio_ = 0.52;
+  double max_pair_center_y_ratio_blue_ = 0.80;
 
 // 长宽比/填充率
   double min_aspect_ = 1.5, max_aspect_ = 12.0, min_fill_ = 0.35;

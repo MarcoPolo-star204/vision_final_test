@@ -26,6 +26,9 @@ ft_detector:
   min_distance: 1.0         # PnP z 小于 1 m -> 丢弃
   max_reproj_error: 30.0    # 四角点重投影平均误差 > 30 px -> 丢弃
   max_body_v: 90.0          # 配对区域平均 V 太亮（反光/地面）-> 丢弃
+  max_pair_aspect: 5.0       # 配对框宽/高 > 该值 -> 太扁，拒绝
+  max_pair_center_y_ratio: 0.52  # 红色：中心低于 52% -> 地面反光，拒绝
+  max_pair_center_y_ratio_blue: 0.80  # 蓝色：允许更靠下
 
   # ---------- 灯条轮廓形状过滤 ----------
   min_aspect: 1.5           # 灯条高/宽 最小值
@@ -34,7 +37,7 @@ ft_detector:
 
   # ---------- dynamic_reconfigure 默认值 ----------
   red_h_min: 0
-  red_h_max: 10
+  red_h_max: 20
   red_h_min2: 170
   red_h_max2: 180
   blue_h_min: 100
