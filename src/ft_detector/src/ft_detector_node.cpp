@@ -851,6 +851,7 @@ class FtDetector {
 
 // 创建一条检测
         ft_msgs::Detection det;
+        bool pose_ok = false;
 
 // 帧内 id
         det.id = static_cast<uint32_t>(id);
@@ -1014,6 +1015,7 @@ class FtDetector {
 
 // 发 TF
           tf_broadcaster_->sendTransform(tf);
+          pose_ok = true;
 
 // if 结束
         }
@@ -1074,6 +1076,9 @@ class FtDetector {
 
 // 重复就跳过
         if (duplicate) { ++id; continue; }
+
+// 没做成 PnP 的检测不能发布：pose 会默认全 0
+        if (!pose_ok) { ++id; continue; }
 
 // 放进检测数组
         out.detections.push_back(det);
