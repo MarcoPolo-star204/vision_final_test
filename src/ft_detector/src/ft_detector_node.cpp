@@ -1,17 +1,7 @@
 // ============================================================
-// ft_detector_node.cpp 逐行注释版 · 第 1 批
 // 覆盖：头文件、结构体、类、构造函数、回调注册、buildMasks、
 //       detectBars、buildPair、pairBars、barCorners。
-// 说明：这是生产代码，参与 catkin_make；每一行代码上方都有一行注释。
-// ============================================================
-
-// 引入 ROS 总头文件：NodeHandle、Publisher、Subscriber、spin 等
-#include <ros/ros.h>
-
-// 引入压缩图像消息类型，对应 /hk_camera/image_raw/compressed
-#include <sensor_msgs/CompressedImage.h>
-
-// 引入相机信息消息类型，里面有 K、D、frame_id
+// 说明：这是生产代码，参与 catkin_makame_id
 #include <sensor_msgs/CameraInfo.h>
 
 // 引入普通图像消息类型，用来发布 /ft/debug/image
@@ -85,6 +75,9 @@ struct LightBar {
 
 // 灯条角度，后面会归一到 [-45,45)
   float angle;
+
+// 原始轮廓点：取角点时用
+  std::vector<cv::Point> contour;
 
 // 结构体定义结束，必须有分号
 };
@@ -405,6 +398,9 @@ class FtDetector {
 // 保存角度
       bar.angle = rect.angle;
 
+// 保存原始轮廓
+      bar.contour = c;
+
 // 角度小于 -45 度，加 90 度
       while (bar.angle < -45.f) bar.angle += 90.f;
 
@@ -548,52 +544,19 @@ class FtDetector {
 
 // barCorners：取灯条外侧两个角点
   static void barCorners(const LightBar& bar, cv::Point2f& left_top, cv::Point2f& left_bottom,
-
-// 参数第二行：右侧两个角点 + 取左/右标志
                          cv::Point2f& right_top, cv::Point2f& right_bottom, bool take_left) {
-
-// 四个角点的 C 数组
     cv::Point2f pts[4];
-
-// 把旋转矩形四个角写进数组
     bar.rect.points(pts);
-
-// 用数组初始化 vector
     std::vector<cv::Point2f> p(pts, pts + 4);
-
-// 按 x 排序
     std::sort(p.begin(), p.end(), comparePointX);
-
-// 取最左两个点
-    cv::Point2f a = p[0], b = p[1];
-
-// 取左灯条
     if (take_left) {
-
-// y 小的当左上
-      left_top = a.y < b.y ? a : b;
-
-// y 大的当左下
-      left_bottom = a.y < b.y ? b : a;
-
-// 否则取右灯条
+      left_top = p[0].y < p[1].y ? p[0] : p[1];
+      left_bottom = p[0].y < p[1].y ? p[1] : p[0];
     } else {
-
-// 取最右两个点
-      cv::Point2f c = p[2], d = p[3];
-
-// y 小的当右上
-      right_top = c.y < d.y ? c : d;
-
-// y 大的当右下
-      right_bottom = c.y < d.y ? d : c;
-
-// else 结束
+      right_top = p[2].y < p[3].y ? p[2] : p[3];
+      right_bottom = p[2].y < p[3].y ? p[3] : p[2];
     }
-
-// barCorners 结束
   }
-
 
 // ============================================================
 // 第 2 批：imageCallback 1–8 步 + 成员变量 + main
@@ -761,6 +724,18 @@ class FtDetector {
 
 // 按左上、右上、右下、左下排好图像点
         std::vector<cv::Point2f> img_pts = {lt, rt2, rb2, lb};
+
+// 亚像素修正：只接受 2px 内的微调，避免跳到别的亮边
+        if (cv_ptr->image.channels() == 3) {
+          cv::Mat gray;
+          cv::cvtColor(cv_ptr->image, gray, cv::COLOR_BGR2GRAY);
+          for (auto& p : img_pts) {
+            std::vector<cv::Point2f> one{p};
+            cv::cornerSubPix(gray, one, cv::Size(3, 3), cv::Size(-1, -1),
+                             cv::TermCriteria(cv::TermCriteria::EPS + cv::TermCriteria::COUNT, 10, 0.01));
+            if (cv::norm(one[0] - p) < 2.0f) p = one[0];
+          }
+        }
 
 // 这一对是不是大装甲板
         const bool is_large = pairs[k].is_large;
