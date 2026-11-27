@@ -24,7 +24,7 @@ ft_detector:
   # ---------- 位姿合法性过滤 ----------
   max_distance: 8.0         # PnP z 超过 8 m -> 丢弃
   min_distance: 1.0         # PnP z 小于 1 m -> 丢弃
-  max_reproj_error: 30.0    # 四角点重投影平均误差 > 30 px -> 丢弃
+  max_reproj_error: 25.0    # 四角点重投影平均误差 > 30 px -> 丢弃
   max_body_v: 90.0          # 配对区域平均 V 太亮（反光/地面）-> 丢弃
   max_pair_aspect: 5.0       # 配对框宽/高 > 该值 -> 太扁，拒绝
   max_pair_center_y_ratio: 0.52  # 红色：中心低于 52% -> 地面反光，拒绝
