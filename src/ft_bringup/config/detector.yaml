@@ -28,7 +28,7 @@ ft_detector:
   max_body_v: 90.0          # 配对区域平均 V 太亮（反光/地面）-> 丢弃
   max_pair_aspect: 5.0       # 配对框宽/高 > 该值 -> 太扁，拒绝
   max_pair_center_y_ratio: 0.52  # 红色：中心低于 52% -> 地面反光，拒绝
-  max_pair_center_y_ratio_blue: 0.80  # 蓝色：允许更靠下
+  max_pair_center_y_ratio_blue: 0.90  # 蓝色：允许更靠下
 
   # ---------- 灯条轮廓形状过滤 ----------
   min_aspect: 1.5           # 灯条高/宽 最小值
