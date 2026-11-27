@@ -29,6 +29,10 @@ ft_detector:
   max_pair_aspect: 5.0       # 配对框宽/高 > 该值 -> 太扁，拒绝
   max_pair_center_y_ratio: 0.52  # 红色：中心低于 52% -> 地面反光，拒绝
   max_pair_center_y_ratio_blue: 0.90  # 蓝色：允许更靠下
+  max_width_diff: 0.60       # 远目标：两根灯条宽度差上限
+  max_small_gap_ratio: 3.5   # 远目标：小板 gap/height 上限
+  max_large_gap_ratio: 5.5   # 远目标：大板 gap/height 上限
+  far_height_threshold: 40.0 # 只对远目标启用跨板过滤
 
   # ---------- 灯条轮廓形状过滤 ----------
   min_aspect: 1.5           # 灯条高/宽 最小值

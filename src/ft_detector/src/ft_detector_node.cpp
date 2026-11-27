@@ -183,6 +183,10 @@ class FtDetector {
     pnh.param<double>("max_pair_aspect", max_pair_aspect_, 5.0);
     pnh.param<double>("max_pair_center_y_ratio", max_pair_center_y_ratio_, 0.52);
     pnh.param<double>("max_pair_center_y_ratio_blue", max_pair_center_y_ratio_blue_, 0.80);
+    pnh.param<double>("max_width_diff", max_width_diff_, 0.45);
+    pnh.param<double>("max_small_gap_ratio", max_small_gap_ratio_, 2.5);
+    pnh.param<double>("max_large_gap_ratio", max_large_gap_ratio_, 4.0);
+    pnh.param<double>("far_height_threshold", far_height_threshold_, 80.0);
 
 // 读灯条最小长宽比
     pnh.param<double>("min_aspect", min_aspect_, 1.5);
@@ -193,7 +197,7 @@ class FtDetector {
 // 读灯条最小填充率
     pnh.param<double>("min_fill", min_fill_, 0.35);
     pnh.param<int>("vertical_kernel_h", vertical_kernel_h_, 15);
-    pnh.param<bool>("roi_enabled", roi_enabled_, true);
+    pnh.param<bool>("roi_enabled", roi_enabled_, false);
     pnh.param<double>("roi_scale", roi_scale_, 2.0);
     pnh.param<double>("roi_margin", roi_margin_, 2.0);
 
@@ -440,6 +444,11 @@ class FtDetector {
 // 水平间距
     const float gap = std::fabs(b.center.x - a.center.x);
 
+// 两根灯条宽度差太大，可能来自不同距离的板
+    const bool far = avg_h < far_height_threshold_;
+    const float width_diff = std::fabs(a.width - b.width) / (avg_w + 1e-6f);
+    if (far && width_diff > max_width_diff_) return false;
+
 // 高度差太大，不配
     if (height_diff > cfg_.max_height_diff) return false;
 
@@ -461,6 +470,15 @@ class FtDetector {
 // 大于阈值判为大装甲板
     is_large = gap_ratio > large_gap_ratio_;
 
+// 仅对远目标启用严格跨板过滤，近目标保留原逻辑
+    if (far) {
+      if (is_large ? gap_ratio > max_large_gap_ratio_ : gap_ratio > max_small_gap_ratio_) return false;
+      const float pair_w = gap + 0.5f * (a.width + b.width);
+      const float pair_aspect = pair_w / (avg_h + 1e-6f);
+      if (is_large ? (pair_aspect < 0.8f || pair_aspect > 5.0f)
+                   : (pair_aspect < 0.5f || pair_aspect > 4.0f)) return false;
+    }
+
 // 能配
     return true;
 
@@ -469,80 +487,31 @@ class FtDetector {
 
 // pairBars：一帧多根灯条的贪心配对
   void pairBars(const std::vector<LightBar>& bars, std::vector<BarPair>& pairs) {
-
-// used 标记每根灯条有没有被用掉
-    std::vector<char> used(bars.size(), 0);
-
-// 遍历每根灯条 i
+    struct Cand { int i, j; bool large; float score; };
+    std::vector<Cand> cands;
     for (size_t i = 0; i < bars.size(); ++i) {
-
-// i 已经用掉，跳过
-      if (used[i]) continue;
-
-// 最佳 j，初始 -1 表示没找到
-      int best = -1;
-
-// 最佳得分，初始很大
-      float best_score = 1e9f;
-
-// 最佳 j 对应的大小板标记
-      bool best_large = false;
-
-// 从 i 后面找 j
       for (size_t j = i + 1; j < bars.size(); ++j) {
-
-// j 已经用掉，跳过
-        if (used[j]) continue;
-
-// 这一对是不是大板
         bool large = false;
-
-// 不能配，跳过
         if (!buildPair(bars[i], bars[j], large)) continue;
-
-// 得分 = 中心高度差 + 角度差
-        const float score = std::fabs(bars[i].center.y - bars[j].center.y) +
-
-// 第二行：角度差
-                            std::fabs(bars[i].angle - bars[j].angle);
-
-// 得分更小，更新最佳
-        if (score < best_score) { best_score = score; best = static_cast<int>(j); best_large = large; }
-
-// j 循环结束
+        const float avg_h = 0.5f * (bars[i].height + bars[j].height);
+        const float avg_w = 0.5f * (bars[i].width + bars[j].width);
+        const float center_dy = std::fabs(bars[i].center.y - bars[j].center.y) / (avg_h + 1e-6f);
+        const float angle_diff = std::fabs(bars[i].angle - bars[j].angle) / 45.f;
+        const float gap_ratio = std::fabs(bars[i].center.x - bars[j].center.x) / (avg_h + 1e-6f);
+        const float width_diff = std::fabs(bars[i].width - bars[j].width) / (avg_w + 1e-6f);
+        // 正确的板：中心齐、角度近、gap 不夸张、两灯条宽度接近
+        const float score = 1.2f * center_dy + 0.8f * angle_diff + 0.45f * gap_ratio + 0.8f * width_diff;
+        cands.push_back({static_cast<int>(i), static_cast<int>(j), large, score});
       }
-
-// 找到可配的 j
-      if (best >= 0) {
-
-// 标记 i 已用
-        used[i] = true;
-
-// 标记 best 已用
-        used[best] = true;
-
-// 创建一对
-        BarPair p;
-
-// 左下标
-        p.left = static_cast<int>(i);
-
-// 右下标
-        p.right = best;
-
-// 大小板标记
-        p.is_large = best_large;
-
-// 放进结果
-        pairs.push_back(p);
-
-// if 结束
-      }
-
-// i 循环结束
     }
-
-// pairBars 结束
+    std::sort(cands.begin(), cands.end(), [](const Cand& a, const Cand& b) { return a.score < b.score; });
+    std::vector<char> used(bars.size(), 0);
+    for (const auto& c : cands) {
+      if (used[c.i] || used[c.j]) continue;
+      used[c.i] = used[c.j] = 1;
+      BarPair p; p.left = c.i; p.right = c.j; p.is_large = c.large;
+      pairs.push_back(p);
+    }
   }
 
 // barCorners：取灯条外侧两个角点
@@ -1183,13 +1152,17 @@ class FtDetector {
   double max_pair_aspect_ = 5.0;
   double max_pair_center_y_ratio_ = 0.52;
   double max_pair_center_y_ratio_blue_ = 0.80;
+  double max_width_diff_ = 0.45;
+  double max_small_gap_ratio_ = 2.5;
+  double max_large_gap_ratio_ = 4.0;
+  double far_height_threshold_ = 80.0;
 
 // 长宽比/填充率
   double min_aspect_ = 1.5, max_aspect_ = 12.0, min_fill_ = 0.35;
   int vertical_kernel_h_ = 15;
 
 // ROI 放大：跟随上一帧目标，丢 2 帧回全图
-  bool roi_enabled_ = true;
+  bool roi_enabled_ = false;
   double roi_scale_ = 2.0, roi_margin_ = 2.0;
   bool has_last_box_ = false;
   cv::Rect2f last_box_;
