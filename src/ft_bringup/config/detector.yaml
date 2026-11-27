@@ -35,6 +35,8 @@ ft_detector:
   far_height_threshold: 40.0 # 只对远目标启用跨板过滤
   min_bar_height: 6.0        # 单侧灯条绝对高度下限（px）
   min_side_height_ratio: 0.60 # 短边/长边高度比下限，防三角形
+  min_quad_fill: 0.55        # 四角四边形填充率下限
+  min_quad_side_ratio: 0.55  # 四边形短边/长边下限
 
   # ---------- 灯条轮廓形状过滤 ----------
   min_aspect: 1.5           # 灯条高/宽 最小值

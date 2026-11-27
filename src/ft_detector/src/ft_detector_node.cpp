@@ -189,6 +189,8 @@ class FtDetector {
     pnh.param<double>("far_height_threshold", far_height_threshold_, 80.0);
     pnh.param<double>("min_bar_height", min_bar_height_, 6.0);
     pnh.param<double>("min_side_height_ratio", min_side_height_ratio_, 0.65);
+    pnh.param<double>("min_quad_fill", min_quad_fill_, 0.55);
+    pnh.param<double>("min_quad_side_ratio", min_quad_side_ratio_, 0.55);
 
 // 读灯条最小长宽比
     pnh.param<double>("min_aspect", min_aspect_, 1.5);
@@ -748,6 +750,26 @@ class FtDetector {
           }
         }
 
+// 四角几何校验：拒绝三角形/退化四边形
+        {
+          const float qarea = std::fabs(cv::contourArea(img_pts));
+          const cv::Rect qbox = cv::boundingRect(img_pts);
+          const float top_len = cv::norm(lt - rt2);
+          const float bottom_len = cv::norm(lb - rb2);
+          const float left_len = cv::norm(lt - lb);
+          const float right_len = cv::norm(rt2 - rb2);
+          const float min_h_side = std::min(left_len, right_len);
+          const float max_h_side = std::max(left_len, right_len);
+          const float min_w_side = std::min(top_len, bottom_len);
+          const float max_w_side = std::max(top_len, bottom_len);
+          if (qbox.area() < 1 || qarea < min_quad_fill_ * qbox.area() ||
+              min_h_side < min_quad_side_ratio_ * max_h_side ||
+              min_w_side < min_quad_side_ratio_ * max_w_side) {
+            ++id;
+            continue;
+          }
+        }
+
 // 这一对是不是大装甲板
         const bool is_large = pairs[k].is_large;
 
@@ -1166,6 +1188,8 @@ class FtDetector {
   double far_height_threshold_ = 80.0;
   double min_bar_height_ = 6.0;
   double min_side_height_ratio_ = 0.65;
+  double min_quad_fill_ = 0.55;
+  double min_quad_side_ratio_ = 0.55;
 
 // 长宽比/填充率
   double min_aspect_ = 1.5, max_aspect_ = 12.0, min_fill_ = 0.35;
