@@ -34,6 +34,7 @@ ft_detector:
   min_aspect: 1.5           # 灯条高/宽 最小值
   max_aspect: 12.0          # 灯条高/宽 最大值
   min_fill: 0.35            # 轮廓面积 / 外接矩形面积
+  vertical_kernel_h: 15      # 竖向闭运算核高度；太大角点会外移
 
   # ---------- dynamic_reconfigure 默认值 ----------
   red_h_min: 0

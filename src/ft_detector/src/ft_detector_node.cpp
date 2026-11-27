@@ -199,6 +199,7 @@ class FtDetector {
 
 // 读灯条最小填充率
     pnh.param<double>("min_fill", min_fill_, 0.35);
+    pnh.param<int>("vertical_kernel_h", vertical_kernel_h_, 15);
 
 // 读没有 camera_info 时的回退 frame
     pnh.param<std::string>("fallback_frame", fallback_frame_, "camera");
@@ -318,7 +319,7 @@ class FtDetector {
     cv::morphologyEx(mask, mask, cv::MORPH_CLOSE, kernel);
 
 // 竖向结构元素：宽 2、高 15
-    cv::Mat vertical = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(2, 15));
+    cv::Mat vertical = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(2, vertical_kernel_h_));
 
 // 竖向闭运算：把断成几截的灯条连起来
     cv::morphologyEx(mask, mask, cv::MORPH_CLOSE, vertical);
@@ -1154,6 +1155,7 @@ class FtDetector {
 
 // 长宽比/填充率
   double min_aspect_ = 1.5, max_aspect_ = 12.0, min_fill_ = 0.35;
+  int vertical_kernel_h_ = 15;
 
 // 回退 frame
   std::string fallback_frame_ = "camera";
