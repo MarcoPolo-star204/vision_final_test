@@ -193,6 +193,9 @@ class FtDetector {
 // 读灯条最小填充率
     pnh.param<double>("min_fill", min_fill_, 0.35);
     pnh.param<int>("vertical_kernel_h", vertical_kernel_h_, 15);
+    pnh.param<bool>("roi_enabled", roi_enabled_, true);
+    pnh.param<double>("roi_scale", roi_scale_, 2.0);
+    pnh.param<double>("roi_margin", roi_margin_, 2.0);
 
 // 读没有 camera_info 时的回退 frame
     pnh.param<std::string>("fallback_frame", fallback_frame_, "camera");
@@ -613,11 +616,34 @@ class FtDetector {
 // if 结束
     }
 
+// 当前帧；默认全图
+    cv::Mat frame = cv_ptr->image;
+    double roi_scale = 1.0;
+    cv::Rect roi_rect;
+
+// 如果上一帧有目标，裁目标周围并放大
+    if (roi_enabled_ && has_last_box_ && last_box_.width > 1 && last_box_.height > 1) {
+      const int mx = static_cast<int>(last_box_.width * roi_margin_);
+      const int my = static_cast<int>(last_box_.height * roi_margin_);
+      int x0 = std::max(0, static_cast<int>(last_box_.x) - mx);
+      int y0 = std::max(0, static_cast<int>(last_box_.y) - my);
+      int x1 = std::min(frame.cols, static_cast<int>(last_box_.x + last_box_.width) + mx);
+      int y1 = std::min(frame.rows, static_cast<int>(last_box_.y + last_box_.height) + my);
+      if (x1 - x0 > 40 && y1 - y0 > 40) {
+        roi_rect = cv::Rect(x0, y0, x1 - x0, y1 - y0);
+        frame = cv_ptr->image(roi_rect).clone();
+        if (roi_scale_ > 1.0) {
+          cv::resize(frame, frame, cv::Size(), roi_scale_, roi_scale_, cv::INTER_LINEAR);
+          roi_scale = roi_scale_;
+        }
+      }
+    }
+
 // 定义 HSV 图
     cv::Mat hsv;
 
 // BGR 转 HSV
-    cv::cvtColor(cv_ptr->image, hsv, cv::COLOR_BGR2HSV);
+    cv::cvtColor(frame, hsv, cv::COLOR_BGR2HSV);
 
 // 定义红/蓝 mask
     cv::Mat red_mask, blue_mask;
@@ -635,7 +661,7 @@ class FtDetector {
     detectBars(blue_mask, blue_bars);
 
 // debug 图要 clone，不能画到原图
-    cv::Mat debug = cv_ptr->image.clone();
+    cv::Mat debug = frame.clone();
 
 // 创建检测数组
     ft_msgs::DetectionArray out;
@@ -678,6 +704,14 @@ class FtDetector {
       }
 
 // if 结束
+    }
+
+// ROI 放大后，内参也要跟着缩放/平移
+    if (roi_scale != 1.0 && K.rows == 3) {
+      K.at<double>(0, 0) *= roi_scale;
+      K.at<double>(1, 1) *= roi_scale;
+      K.at<double>(0, 2) = (K.at<double>(0, 2) - roi_rect.x) * roi_scale;
+      K.at<double>(1, 2) = (K.at<double>(1, 2) - roi_rect.y) * roi_scale;
     }
 
 // 当前帧检测编号，从 0 开始
@@ -726,9 +760,9 @@ class FtDetector {
         std::vector<cv::Point2f> img_pts = {lt, rt2, rb2, lb};
 
 // 亚像素修正：只接受 2px 内的微调，避免跳到别的亮边
-        if (cv_ptr->image.channels() == 3) {
+        if (frame.channels() == 3) {
           cv::Mat gray;
-          cv::cvtColor(cv_ptr->image, gray, cv::COLOR_BGR2GRAY);
+          cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
           for (auto& p : img_pts) {
             std::vector<cv::Point2f> one{p};
             cv::cornerSubPix(gray, one, cv::Size(3, 3), cv::Size(-1, -1),
@@ -1058,6 +1092,18 @@ class FtDetector {
 // 放进检测数组
         out.detections.push_back(det);
 
+// 记录原图坐标，下一帧按它裁 ROI
+        {
+          cv::Rect2f box_orig(
+              static_cast<float>(pair_box.x / roi_scale + roi_rect.x),
+              static_cast<float>(pair_box.y / roi_scale + roi_rect.y),
+              static_cast<float>(pair_box.width / roi_scale),
+              static_cast<float>(pair_box.height / roi_scale));
+          if (!has_last_box_ || box_orig.area() > last_box_.area()) last_box_ = box_orig;
+          has_last_box_ = true;
+          roi_miss_ = 0;
+        }
+
 // id 自增
         ++id;
 
@@ -1065,6 +1111,11 @@ class FtDetector {
       }
 
 // 颜色循环结束
+    }
+
+// ROI 连续两帧没检出，回全图，避免死锁在小区域
+    if (out.detections.empty() && roi_scale != 1.0) {
+      if (++roi_miss_ >= 2) { has_last_box_ = false; roi_miss_ = 0; }
     }
 
 // 没有 camera_info
@@ -1136,6 +1187,13 @@ class FtDetector {
 // 长宽比/填充率
   double min_aspect_ = 1.5, max_aspect_ = 12.0, min_fill_ = 0.35;
   int vertical_kernel_h_ = 15;
+
+// ROI 放大：跟随上一帧目标，丢 2 帧回全图
+  bool roi_enabled_ = true;
+  double roi_scale_ = 2.0, roi_margin_ = 2.0;
+  bool has_last_box_ = false;
+  cv::Rect2f last_box_;
+  int roi_miss_ = 0;
 
 // 回退 frame
   std::string fallback_frame_ = "camera";
