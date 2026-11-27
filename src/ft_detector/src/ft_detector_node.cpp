@@ -187,6 +187,8 @@ class FtDetector {
     pnh.param<double>("max_small_gap_ratio", max_small_gap_ratio_, 2.5);
     pnh.param<double>("max_large_gap_ratio", max_large_gap_ratio_, 4.0);
     pnh.param<double>("far_height_threshold", far_height_threshold_, 80.0);
+    pnh.param<double>("min_bar_height", min_bar_height_, 6.0);
+    pnh.param<double>("min_side_height_ratio", min_side_height_ratio_, 0.65);
 
 // 读灯条最小长宽比
     pnh.param<double>("min_aspect", min_aspect_, 1.5);
@@ -448,6 +450,12 @@ class FtDetector {
     const bool far = avg_h < far_height_threshold_;
     const float width_diff = std::fabs(a.width - b.width) / (avg_w + 1e-6f);
     if (far && width_diff > max_width_diff_) return false;
+
+// 一侧灯条太短：不配，避免半截灯条拼出三角形
+    const float short_h = std::min(a.height, b.height);
+    const float long_h = std::max(a.height, b.height);
+    if (short_h < min_bar_height_) return false;
+    if (short_h / (long_h + 1e-6f) < min_side_height_ratio_) return false;
 
 // 高度差太大，不配
     if (height_diff > cfg_.max_height_diff) return false;
@@ -1156,6 +1164,8 @@ class FtDetector {
   double max_small_gap_ratio_ = 2.5;
   double max_large_gap_ratio_ = 4.0;
   double far_height_threshold_ = 80.0;
+  double min_bar_height_ = 6.0;
+  double min_side_height_ratio_ = 0.65;
 
 // 长宽比/填充率
   double min_aspect_ = 1.5, max_aspect_ = 12.0, min_fill_ = 0.35;
